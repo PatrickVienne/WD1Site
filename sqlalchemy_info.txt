@@ -1,0 +1,64 @@
+========
+OVERVIEW
+========
+Integer() - INT
+String() - ASCII strings - VARCHAR
+Unicode() - Unicode string - VARCHAR or NVARCHAR depending on database
+Boolean() - BOOLEAN, INT, TINYINT depending on db support for boolean type
+DateTime() - DATETIME or TIMESTAMP returns Python datetime() objects.
+Float() - floating point values
+Numeric() - precision numbers using Python Decimal()
+
+
+===============
+EXAMPLE QUERIES
+===============
+https://jpscaletti.com/sqla-wrapper/queries.html
+db.add(you)
+db.delete(me)
+db.commit()
+
+db.query(User).filter_by(username='peter').first()
+db.query(User).filter(User.email.endswith('@example.com')).all()
+db.query(User).limit(1).all()
+db.query(User).order_by(User.username)
+db.query(User).get(1)
+db.query(db.func.max(User.id)).scalar()
+get_or_error()
+first_or_error()
+
+
+=============
+More on Types
+=============
+https://docs.sqlalchemy.org/en/13/core/type_basics.html
+
+sqlalchemy.types.BigInteger, int
+sqlalchemy.types.Boolean(create_constraint=True, name=None, _create_events=True), bool
+sqlalchemy.types.Date, datetime.date()
+sqlalchemy.types.DateTime(timezone=False), datetime.datetime()
+
+sqlalchemy.types.Enum, int
+import enum
+class MyEnum(enum.Enum):
+    one = 1
+    two = 2
+    three = 3
+
+t = Table(
+    'data', MetaData(),
+    Column('value', Enum(MyEnum))
+)
+
+class sqlalchemy.types.Float(precision=None, asdecimal=False, decimal_return_scale=None), float
+
+class sqlalchemy.types.Integer, int
+
+sqlalchemy.types.Interval(native=True, second_precision=None, day_precision=None), datetime.timedelta()
+
+class sqlalchemy.types.String(length=None, collation=None, convert_unicode=False, unicode_error=None, _warn_on_bytestring=False, _expect_unicode=False), str
+
+class sqlalchemy.types.Text(length=None, collation=None, convert_unicode=False, unicode_error=None, _warn_on_bytestring=False, _expect_unicode=False), str
+
+class sqlalchemy.types.Time(timezone=False), datetime.time()
+
