@@ -1,0 +1,4 @@
+# 24.11.2019
+add github link to page
+add heroku link to page
+replace links for {{url_for('func_name')}}
