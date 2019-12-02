@@ -3,6 +3,8 @@ import random
 import model
 import string
 
+import hashlib
+
 from flask import request
 from flask import url_for
 
@@ -15,17 +17,24 @@ db = model.db
 
 db.create_all()
 
+hasher = hashlib.blake2b()
+
+
+def hash_password(password):
+    password = password.encode('utf-8')
+    hasher.update(password)
+    return hasher.digest()
 
 def create_dummy_users():
     users = []
     for x in range(N_USERS):
         name = "".join(random.choices(string.ascii_lowercase, k=10))
-        user = model.User(username=name, email=f"{name}@home.com")
+        user = model.User(username=name, email=f"{name}@home.com", password=hash_password(name))
         users.append(user)
 
-    my_user = model.User(username="admin", email="admin@home.com")
+    my_user = model.User(username="admin", email="admin@home.com", password=hash_password("admin"))
     users.append(my_user)
-    test_user = model.User(username="test", email="test@home.com")
+    test_user = model.User(username="test", email="test@home.com", password=hash_password("test"))
     users.append(test_user)
 
     for user in users:
@@ -100,6 +109,7 @@ def register():
         # TODO: register valid user
         email = current_request.form.get('email')
         username = current_request.form.get('username')
+        password = current_request.form.get('password')
         user_exists = db.query(model.User).filter_by(username=username).first()
         email_exists = db.query(model.User).filter_by(email=email).first()
         if user_exists:
@@ -107,7 +117,9 @@ def register():
         elif email_exists:
             print("Email already exists")
         else:
-            new_user = model.User(username=username, email=email)
+            new_user = model.User(username=username,
+                                  email=email,
+                                  password=hash_password(password))
             db.add(new_user)
             db.commit()
             return flask.redirect(flask.url_for('register'))
@@ -133,6 +145,28 @@ def account_delete(account_id):
         db.commit()
         return flask.redirect(flask.url_for('accounts'))
     else:
+        return flask.redirect(flask.url_for('accounts'))
+
+
+@app.route("/accounts/<account_id>/edit", methods=['GET', 'POST'])
+def account_edit(account_id):
+    user_to_edit = db.query(model.User).get(account_id)
+
+    if user_to_edit is None:
+        return flask.redirect(flask.url_for('accounts'))
+
+    current_request = flask.request
+    if current_request.method == 'GET':
+        return flask.render_template('account_edit.html', account=user_to_edit)
+    elif current_request.method == 'POST':
+        email = current_request.form.get('email')
+        username = current_request.form.get('username')
+
+        user_to_edit.email = email
+        user_to_edit.username = username
+
+        db.add(user_to_edit)
+        db.commit()
         return flask.redirect(flask.url_for('accounts'))
 
 
