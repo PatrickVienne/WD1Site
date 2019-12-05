@@ -5,8 +5,6 @@ import string
 
 import hashlib
 
-from flask import request
-from flask import url_for
 
 N_USERS = 10
 N_RECEIPES = 10
@@ -17,13 +15,14 @@ db = model.db
 
 db.create_all()
 
-hasher = hashlib.blake2b()
+
 
 
 def hash_password(password):
+    hasher = hashlib.sha512()
     password = password.encode('utf-8')
     hasher.update(password)
-    return hasher.digest()
+    return hasher.hexdigest()
 
 def create_dummy_users():
     users = []
@@ -168,6 +167,31 @@ def account_edit(account_id):
         db.add(user_to_edit)
         db.commit()
         return flask.redirect(flask.url_for('accounts'))
+
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    current_request = flask.request
+    if current_request.method=='GET':
+        return flask.render_template('login.html')
+    elif current_request.method == 'POST':
+        email = current_request.form.get('email')
+        password = current_request.form.get('password')
+        user = db.query(model.User).filter_by(email=email).first()
+        if user is None:
+            print("User does not exist")
+            return flask.redirect(flask.url_for('login'))
+        else:
+            if hash_password(password) == user.password:
+                return flask.redirect(flask.url_for('index'))
+            else:
+                return flask.redirect(flask.url_for('forbidden'))
+
+
+@app.route("/forbidden")
+def forbidden():
+    return flask.render_template('forbidden.html')
+
 
 
 if __name__ == '__main__':
