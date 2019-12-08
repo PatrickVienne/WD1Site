@@ -1,3 +1,6 @@
+import datetime
+import uuid
+
 import flask
 import random
 import model
@@ -15,7 +18,24 @@ db = model.db
 
 db.create_all()
 
+def require_session_token(func):
+    def wrapper(*args, **kwargs):
+        session_token = flask.request.cookies.get("session_token")
+        redirect_url = flask.request.path or '/'
+        if not session_token:
+            app.logger.error('no token in request')
+            return flask.redirect(flask.url_for('login', redirectUrl=redirect_url))
+        user = db.query(model.User).filter_by(session_token=session_token).filter(model.User.session_expiry_datetime>=datetime.datetime.now()).first()
+        if not user:
+            app.logger.error(f'token {session_token} not valid')
+            return flask.redirect(flask.url_for('login', redirectUrl=redirect_url))
+        app.logger.info(f'authenticated user {user.username} with token {user.session_token} valid until {user.session_expiry_datetime.isoformat()}')
+        flask.request.user = user
+        return func(*args, **kwargs)
 
+    # Renaming the function name:
+    wrapper.__name__ = func.__name__
+    return wrapper
 
 
 def hash_password(password):
@@ -91,6 +111,7 @@ def secret_number_game():
 
 
 @app.route("/blog")
+@require_session_token
 def blog():
     db_receipes = db.query(model.Receipe).filter_by(taste="sweet").all()
     return flask.render_template("blog.html", receipes=db_receipes)
@@ -125,12 +146,14 @@ def register():
 
 
 @app.route("/accounts")
+@require_session_token
 def accounts():
     all_users = db.query(model.User).all()
     return flask.render_template('accounts.html', accounts=all_users)
 
 
 @app.route("/accounts/<account_id>/delete", methods=["GET", "POST"])
+@require_session_token
 def account_delete(account_id):
     user_to_delete = db.query(model.User).get(account_id)
     if user_to_delete is None:
@@ -148,6 +171,7 @@ def account_delete(account_id):
 
 
 @app.route("/accounts/<account_id>/edit", methods=['GET', 'POST'])
+@require_session_token
 def account_edit(account_id):
     user_to_edit = db.query(model.User).get(account_id)
 
@@ -183,7 +207,16 @@ def login():
             return flask.redirect(flask.url_for('login'))
         else:
             if hash_password(password) == user.password:
-                return flask.redirect(flask.url_for('index'))
+                # save user's session token into a cookie
+                session_token = str(uuid.uuid4())
+                user.session_token = session_token
+                user.session_expiry_datetime = datetime.datetime.now() + datetime.timedelta(0, 10)
+                db.add(user)
+                db.commit()
+                forward_page = current_request.args.get('redirectUrl', "/")
+                response = flask.make_response(flask.redirect(forward_page))
+                response.set_cookie("session_token", session_token, httponly=True, samesite='Strict')
+                return response
             else:
                 return flask.redirect(flask.url_for('forbidden'))
 
@@ -192,7 +225,19 @@ def login():
 def forbidden():
     return flask.render_template('forbidden.html')
 
-
+@app.route("/logout")
+def logout():
+    session_token = flask.request.cookies.get("session_token")
+    if not session_token:
+        return flask.redirect(flask.url_for('login'))
+    user = db.query(model.User).filter_by(session_token=session_token).filter(
+        model.User.session_expiry_datetime >= datetime.datetime.now()).first()
+    if user:
+        user.session_token=None
+        user.session_expiry_datetime=datetime.datetime.now()
+        db.add(user)
+        db.commit()
+    return flask.redirect(flask.url_for('login'))
 
 if __name__ == '__main__':
     add_dummy_data()

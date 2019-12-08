@@ -15,6 +15,8 @@ class User(db.Model):
     username = db.Column(db.String, unique=True, nullable=False)
     email = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
+    session_token = db.Column(db.String, nullable=True)
+    session_expiry_datetime = db.Column(db.DateTime, nullable=True)
 
 
 class Receipe(db.Model):
