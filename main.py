@@ -1,7 +1,10 @@
+import datetime
+
 import flask
 import random
 import model
 import string
+import uuid
 
 import hashlib
 
@@ -74,6 +77,28 @@ def add_dummy_data():
     create_dummy_receipes()
 
 
+def require_session_token(func):
+    """Decorator to require authentication to access routes"""
+    def wrapper(*args, **kwargs):
+        session_token = flask.request.cookies.get("session_token")
+        redirect_url = flask.request.path or '/'
+        if not session_token:
+            app.logger.error('no token in request')
+            return flask.redirect(flask.url_for('login', redirectTo=redirect_url))
+        user = db.query(model.User).filter_by(session_token=session_token).filter(model.User.session_expiry_datetime>=datetime.datetime.now()).first()
+        if not user:
+            app.logger.error(f'token {session_token} not valid')
+            return flask.redirect(flask.url_for('login', redirectTo=redirect_url))
+        app.logger.info(f'authenticated user {user.username} with token {user.session_token} valid until {user.session_expiry_datetime.isoformat()}')
+        flask.request.user = user
+        return func(*args, **kwargs)
+
+    # Renaming the function name:
+    # wrapper.__name__ = func.__name__
+    return wrapper
+
+
+
 @app.route("/")
 def index():
     return flask.render_template("index.html", myname="Patrick")
@@ -126,6 +151,24 @@ def register():
 
 @app.route("/accounts")
 def accounts():
+
+    # get session token
+    current_request = flask.request
+    session_token = current_request.cookies.get('session_token')
+    if not session_token:
+        # TODO: use redirect url to get back to this page after login
+        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
+    user = db.query(model.User).filter_by(session_token=session_token).first()
+    if not user:
+        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
+    if user and not user.session_expiry_datetime>datetime.datetime.now():
+        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
+
+    # user is authenticated, refresh token expiry
+    user.session_expiry_datetime = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+    db.add(user)
+    db.commit()
+
     all_users = db.query(model.User).all()
     return flask.render_template('accounts.html', accounts=all_users)
 
@@ -183,7 +226,23 @@ def login():
             return flask.redirect(flask.url_for('login'))
         else:
             if hash_password(password) == user.password:
-                return flask.redirect(flask.url_for('index'))
+                # find redirect method from request argument
+                redirect_url = current_request.args.get('redirectTo', 'index')
+
+                # generate token and expiry time in 1 hour from now
+                session_token = str(uuid.uuid4())
+                session_expiry_datetime = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+                # update user with new session token and expiry
+                user.session_token = session_token
+                user.session_expiry_datetime = session_expiry_datetime
+                # save in DB
+                db.add(user)
+                db.commit()
+
+                # make response and add cookie with session token
+                response = flask.make_response(flask.redirect(flask.url_for(redirect_url)))
+                response.set_cookie('session_token', session_token)
+                return response
             else:
                 return flask.redirect(flask.url_for('forbidden'))
 
@@ -192,6 +251,28 @@ def login():
 def forbidden():
     return flask.render_template('forbidden.html')
 
+
+@app.route('/logout')
+def logout():
+    # get session token
+    current_request = flask.request
+    session_token = current_request.cookies.get('session_token')
+    if not session_token:
+        # TODO: use redirect url to get back to this page after login
+        return flask.redirect(flask.url_for('login'))
+    user = db.query(model.User).filter_by(session_token=session_token).first()
+    if not user:
+        return flask.redirect(flask.url_for('login'))
+    if user and not user.session_expiry_datetime > datetime.datetime.now():
+        return flask.redirect(flask.url_for('login'))
+
+    # remove token from db and browser cookie
+    user.session_token = None
+    user.session_expiry_datetime = None
+    db.add(user)
+    db.commit()
+
+    return flask.redirect(flask.url_for('login'))
 
 
 if __name__ == '__main__':
