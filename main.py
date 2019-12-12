@@ -94,7 +94,7 @@ def require_session_token(func):
         return func(*args, **kwargs)
 
     # Renaming the function name:
-    # wrapper.__name__ = func.__name__
+    wrapper.__name__ = func.__name__
     return wrapper
 
 
@@ -150,25 +150,8 @@ def register():
 
 
 @app.route("/accounts")
+@require_session_token
 def accounts():
-
-    # get session token
-    current_request = flask.request
-    session_token = current_request.cookies.get('session_token')
-    if not session_token:
-        # TODO: use redirect url to get back to this page after login
-        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
-    user = db.query(model.User).filter_by(session_token=session_token).first()
-    if not user:
-        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
-    if user and not user.session_expiry_datetime>datetime.datetime.now():
-        return flask.redirect(flask.url_for('login', redirectTo='accounts'))
-
-    # user is authenticated, refresh token expiry
-    user.session_expiry_datetime = datetime.datetime.now() + datetime.timedelta(seconds=3600)
-    db.add(user)
-    db.commit()
-
     all_users = db.query(model.User).all()
     return flask.render_template('accounts.html', accounts=all_users)
 
@@ -227,7 +210,7 @@ def login():
         else:
             if hash_password(password) == user.password:
                 # find redirect method from request argument
-                redirect_url = current_request.args.get('redirectTo', 'index')
+                redirect_url = current_request.args.get('redirectTo', '/')
 
                 # generate token and expiry time in 1 hour from now
                 session_token = str(uuid.uuid4())
@@ -240,7 +223,7 @@ def login():
                 db.commit()
 
                 # make response and add cookie with session token
-                response = flask.make_response(flask.redirect(flask.url_for(redirect_url)))
+                response = flask.make_response(flask.redirect(redirect_url))
                 response.set_cookie('session_token', session_token)
                 return response
             else:
