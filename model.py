@@ -9,6 +9,7 @@ SQLITE_FILE = 'localhost.sqlite'
 
 db = sqla_wrapper.SQLAlchemy(os.getenv("DATABASE_URL", f"sqlite:///{SQLITE_FILE}"))
 
+# db = sqla_wrapper.SQLAlchemy("postgres://qrcrrzujqhrmol:669cb880e4f79ced678ac296be83b6080c3240dc9745d949ca7fddcb45cf18ed@ec2-46-137-187-23.eu-west-1.compute.amazonaws.com:5432/derspsvghaisgh")
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
